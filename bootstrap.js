@@ -4,41 +4,29 @@ Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/Messaging.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
-function handleLinkAdded(event, browser) {
-  // ---- Start copied from browser.js ----
+function handleLinkAdded(event) {
   let target = event.originalTarget;
-  if (!target.href || target.disabled)
+  if (!target.href || target.disabled || !target.rel) {
     return;
+  }
 
-  // Ignore on frames and other documents
-  if (target.ownerDocument != browser.contentDocument)
-    return;
+  // TODO: Ignore on frames and other documents
 
   // Sanitize the rel string
-  let list = [];
-  if (target.rel) {
-    list = target.rel.toLowerCase().split(/\s+/);
-    let hash = {};
-    list.forEach(function(value) { hash[value] = true; });
-    list = [];
-    for (let rel in hash)
-      list.push("[" + rel + "]");
-  }
-  // ---- End copied from browser.js ----
+  let list = target.rel.toLowerCase().split(/\s+/);
 
   // Bail if this isn't an apple touch icon
-  if (list.indexOf("[apple-touch-icon]") == -1 &&
-      list.indexOf("[apple-touch-icon-precomposed]") == -1) {
+  if (list.indexOf("apple-touch-icon") == -1 &&
+      list.indexOf("apple-touch-icon-precomposed") == -1) {
     return;
   }
 
-  Services.console.logStringMessage("Found apple touch icon: " + target.href);
+  Services.console.logStringMessage("***** Found apple touch icon: " + target.href);
 
-  let win = browser.ownerDocument.defaultView;
-
+  let win = Services.wm.getMostRecentWindow("navigator:browser");
   let json = {
     type: "Link:Favicon",
-    tabID: win.BrowserApp.getTabForBrowser(browser).id,
+    tabID: win.BrowserApp.getTabForWindow(target.ownerDocument.defaultView).id,
     href: win.resolveGeckoURI(target.href),
     size: 114
   };
@@ -47,16 +35,12 @@ function handleLinkAdded(event, browser) {
 
 function onTabOpen(event) {
   let browser = event.currentTarget;
-  browser.addEventListener("DOMLinkAdded", function(e) {
-    handleLinkAdded(e, browser);
-  }, true);
+  browser.addEventListener("DOMLinkAdded", handleLinkAdded, true);
 }
 
 function onTabClose(event) {
   let browser = event.currentTarget;
-  browser.removeEventListener("DOMLinkAdded", function(e) {
-    handleLinkAdded(e, browser);
-  }, true);  
+  browser.removeEventListener("DOMLinkAdded", handleLinkAdded, true);
 }
 
 function loadIntoWindow(window) {
